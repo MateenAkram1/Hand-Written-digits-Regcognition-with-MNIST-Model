@@ -1,0 +1,56 @@
+import torch
+import torchvision
+import torch.optim as optim
+from torchvision import transforms
+from mnist_model import MNIST_CNN
+import torch.nn as nn
+import torch.nn.functional as F
+
+# Hyperparameters
+BATCH_SIZE = 64
+EPOCHS = 10
+LR = 0.001
+
+# Load MNIST dataset
+transform = transforms.Compose([transforms.ToTensor()])
+train_dataset = torchvision.datasets.MNIST(root='./data', train=True, download=True, transform=transform)
+test_dataset = torchvision.datasets.MNIST(root='./data', train=False, download=True, transform=transform)
+
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+
+# Initialize model, loss, optimizer
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model = MNIST_CNN().to(device)
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=LR)
+
+# Training loop
+for epoch in range(EPOCHS):
+    model.train()
+    for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(data)
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step()
+
+    # Validate
+    model.eval()
+    test_loss = 0
+    correct = 0
+    with torch.no_grad():
+        for data, target in test_loader:
+            data, target = data.to(device), target.to(device)
+            output = model(data)
+            test_loss += criterion(output, target).item()
+            pred = output.argmax(dim=1)
+            correct += pred.eq(target).sum().item()
+
+    test_loss /= len(test_loader.dataset)
+    accuracy = 100. * correct / len(test_loader.dataset)
+    print(f'Epoch {epoch+1}: Test Loss = {test_loss:.4f}, Accuracy = {accuracy:.2f}%')
+
+# Save the trained model
+torch.save(model.state_dict(), 'mnist_model.pth')
